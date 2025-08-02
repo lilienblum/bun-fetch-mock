@@ -1,0 +1,32 @@
+{
+	"name": "bun-fetch-mock",
+	"version": "1.0.0",
+	"description": "A powerful fetch mocking library for Bun tests with TypeScript support",
+	"module": "index.ts",
+	"type": "module",
+	"scripts": {
+		"test": "bun test"
+	},
+	"keywords": [
+		"bun",
+		"fetch",
+		"mock",
+		"testing"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/dn-l/bun-fetch-mock.git"
+	},
+	"bugs": {
+		"url": "https://github.com/dn-l/bun-fetch-mock/issues"
+	},
+	"homepage": "https://github.com/dn-l/bun-fetch-mock#readme",
+	"author": "Dan Lilienblum",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"engines": {
+		"bun": ">=1.0.0"
+	}
+}
