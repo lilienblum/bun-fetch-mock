@@ -18,17 +18,40 @@ interface MockResponse<T = unknown> {
 	statusText?: string;
 }
 
+/**
+ * Options for configuring a mocked response.
+ */
 export interface MockOpts<T = unknown> extends MockResponse<T> {
+	/**
+	 * When true, removes this mock after the first matching request.
+	 */
 	once?: boolean;
 }
 
+/**
+ * Accepted URL input for registering a mock.
+ * Use an absolute URL or a path that starts with `/`.
+ */
 export type UrlOrPath = `https://${string}` | `http://${string}` | `/${string}`;
 
 function getKey({ method, url }: { method: HttpMethod; url: string }) {
 	return `[${method}] ${url}`;
 }
 
+function joinBaseUrl(baseUrl: string, path: string) {
+	if (!baseUrl) {
+		return path;
+	}
+
+	const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+
+	return `${normalizedBaseUrl}${path}`;
+}
+
 export interface FetchMockOpts {
+	/**
+	 * Optional base URL prepended to path-style mock URLs (for example `/users`).
+	 */
 	baseUrl?: string;
 }
 
@@ -79,6 +102,9 @@ class FetchMock {
 		return validMethods.includes(method as HttpMethod);
 	}
 
+	/**
+	 * Clears all registered mocks and queued follow-up mocks.
+	 */
 	reset(this: FetchMock) {
 		this.mocks.clear();
 		this.mockQueue.clear();
@@ -86,34 +112,58 @@ class FetchMock {
 		return this;
 	}
 
+	/**
+	 * Registers a mock for a `GET` request.
+	 */
 	get<T>(this: FetchMock, url: UrlOrPath, opts?: MockOpts<T>) {
 		return this.#mockRequest("GET", url, opts);
 	}
 
+	/**
+	 * Registers a mock for a `POST` request.
+	 */
 	post<T>(this: FetchMock, url: UrlOrPath, opts?: MockOpts<T>) {
 		return this.#mockRequest("POST", url, opts);
 	}
 
+	/**
+	 * Registers a mock for a `PUT` request.
+	 */
 	put<T>(this: FetchMock, url: UrlOrPath, opts?: MockOpts<T>) {
 		return this.#mockRequest("PUT", url, opts);
 	}
 
+	/**
+	 * Registers a mock for a `DELETE` request.
+	 */
 	delete<T>(this: FetchMock, url: UrlOrPath, opts?: MockOpts<T>) {
 		return this.#mockRequest("DELETE", url, opts);
 	}
 
+	/**
+	 * Registers a mock for a `PATCH` request.
+	 */
 	patch<T>(this: FetchMock, url: UrlOrPath, opts?: MockOpts<T>) {
 		return this.#mockRequest("PATCH", url, opts);
 	}
 
+	/**
+	 * Registers a mock for a `HEAD` request.
+	 */
 	head<T>(this: FetchMock, url: UrlOrPath, opts?: MockOpts<T>) {
 		return this.#mockRequest("HEAD", url, opts);
 	}
 
+	/**
+	 * Registers a mock for an `OPTIONS` request.
+	 */
 	options<T>(this: FetchMock, url: UrlOrPath, opts?: MockOpts<T>) {
 		return this.#mockRequest("OPTIONS", url, opts);
 	}
 
+	/**
+	 * Asserts that every configured mock has been used at least once.
+	 */
 	assertAllMocksUsed(this: FetchMock) {
 		for (const [key, opts] of this.mocks.entries()) {
 			expect(opts.isUsed, `Fetch mock ${key} was not used`).toBe(true);
@@ -125,12 +175,17 @@ class FetchMock {
 		}
 	}
 
+	/**
+	 * Internal fetch implementation used by the `globalThis.fetch` spy.
+	 *
+	 * @throws If the request method is unsupported or no matching mock exists.
+	 */
 	async fetchMock(
 		this: FetchMock,
 		url: string,
 		init?: RequestInit,
 	): Promise<Response> {
-		const methodStr = init?.method ?? DEFAULT_METHOD;
+		const methodStr = (init?.method ?? DEFAULT_METHOD).toUpperCase();
 
 		if (!this.validateMethod(methodStr)) {
 			throw new Error(
@@ -191,13 +246,17 @@ class FetchMock {
 		return Response.json(data, { status, headers, statusText });
 	}
 
+	/**
+	 * Adds a mock entry for an HTTP method + URL pair.
+	 * If one already exists for the same key, queues this mock to be used next.
+	 */
 	#mockRequest<T>(method: HttpMethod, url: UrlOrPath, opts?: MockOpts<T>) {
 		const urlError = this.validateUrl(url);
 		if (urlError) {
 			throw new Error(`Invalid URL for ${method} mock: ${urlError.message}`);
 		}
 
-		const fullUrl = url.startsWith("/") ? `${this.baseUrl}${url}` : url;
+		const fullUrl = url.startsWith("/") ? joinBaseUrl(this.baseUrl, url) : url;
 		const key = getKey({ method, url: fullUrl });
 
 		const mockData = {
@@ -217,6 +276,12 @@ class FetchMock {
 	}
 }
 
+/**
+ * Creates a fetch mock instance and wires it into Bun's test lifecycle.
+ *
+ * `fetch` is mocked immediately and restored in `afterAll`.
+ * Call this at module scope or inside `describe(...)`, not inside `test(...)`.
+ */
 export function useFetchMock(opts: FetchMockOpts = {}) {
 	const mock = new FetchMock(opts);
 	const spyFetch = spyOn(globalThis, "fetch");
@@ -225,17 +290,25 @@ export function useFetchMock(opts: FetchMockOpts = {}) {
 		(mock.fetchMock as unknown as typeof fetch).bind(mock),
 	);
 
-	beforeAll(() => {
-		if (!spyFetch.mock) {
-			spyFetch.mockImplementation(
-				(mock.fetchMock as unknown as typeof fetch).bind(mock),
-			);
-		}
-	});
+	try {
+		beforeAll(() => {
+			if (!spyFetch.mock) {
+				spyFetch.mockImplementation(
+					(mock.fetchMock as unknown as typeof fetch).bind(mock),
+				);
+			}
+		});
 
-	afterAll(() => {
+		afterAll(() => {
+			spyFetch.mockRestore();
+		});
+	} catch (error) {
 		spyFetch.mockRestore();
-	});
+		const detail = error instanceof Error ? error.message : String(error);
+		throw new Error(
+			`useFetchMock() must be called at module scope or inside describe(), not inside test(). ${detail}`,
+		);
+	}
 
 	return mock;
 }

@@ -5,7 +5,9 @@
 	"module": "index.ts",
 	"type": "module",
 	"scripts": {
-		"test": "bun test"
+		"test": "bun test",
+		"test:coverage": "bun test --coverage",
+		"type-check": "tsc --noEmit"
 	},
 	"keywords": [
 		"bun",
@@ -24,7 +26,8 @@
 	"author": "Dan Lilienblum",
 	"license": "MIT",
 	"devDependencies": {
-		"@types/bun": "latest"
+		"@types/bun": "latest",
+		"typescript": "^5.9.2"
 	},
 	"engines": {
 		"bun": ">=1.0.0"

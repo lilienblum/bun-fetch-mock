@@ -1,10 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { useFetchMock, type UrlOrPath } from "./index";
 
 describe("bun-fetch-mock", () => {
+	const fetchMock = useFetchMock({ baseUrl: "https://api.example.com/" });
+
+	beforeEach(() => {
+		fetchMock.reset();
+	});
+
 	describe("Basic HTTP methods", () => {
 		test("GET request with JSON response", async () => {
-			const fetchMock = useFetchMock();
 			const testData = { id: 1, name: "John Doe" };
 
 			fetchMock.get("https://api.example.com/users/1", {
@@ -20,7 +25,6 @@ describe("bun-fetch-mock", () => {
 		});
 
 		test("POST request with custom status", async () => {
-			const fetchMock = useFetchMock();
 			const newUser = { id: 2, name: "Jane Doe" };
 
 			fetchMock.post("https://api.example.com/users", {
@@ -42,7 +46,6 @@ describe("bun-fetch-mock", () => {
 		});
 
 		test("PUT request", async () => {
-			const fetchMock = useFetchMock();
 			const updatedUser = { id: 1, name: "John Smith" };
 
 			fetchMock.put("https://api.example.com/users/1", {
@@ -60,8 +63,6 @@ describe("bun-fetch-mock", () => {
 		});
 
 		test("DELETE request", async () => {
-			const fetchMock = useFetchMock();
-
 			fetchMock.delete("https://api.example.com/users/1", {
 				status: 204,
 			});
@@ -75,7 +76,6 @@ describe("bun-fetch-mock", () => {
 		});
 
 		test("PATCH request", async () => {
-			const fetchMock = useFetchMock();
 			const patchData = { name: "John Updated" };
 
 			fetchMock.patch("https://api.example.com/users/1", {
@@ -93,8 +93,6 @@ describe("bun-fetch-mock", () => {
 		});
 
 		test("HEAD request", async () => {
-			const fetchMock = useFetchMock();
-
 			fetchMock.head("https://api.example.com/users/1", {
 				status: 200,
 				headers: { "X-User-Exists": "true" },
@@ -110,9 +108,22 @@ describe("bun-fetch-mock", () => {
 			fetchMock.assertAllMocksUsed();
 		});
 
-		test("OPTIONS request", async () => {
-			const fetchMock = useFetchMock();
+		test("HEAD request ignores provided response data", async () => {
+			fetchMock.head("https://api.example.com/users/2", {
+				data: { ignored: true },
+				status: 200,
+			});
 
+			const response = await fetch("https://api.example.com/users/2", {
+				method: "HEAD",
+			});
+
+			expect(response.status).toBe(200);
+			expect(await response.text()).toBe("");
+			fetchMock.assertAllMocksUsed();
+		});
+
+		test("OPTIONS request", async () => {
 			fetchMock.options("https://api.example.com/users", {
 				status: 200,
 				headers: { Allow: "GET, POST, PUT, DELETE" },
@@ -130,8 +141,6 @@ describe("bun-fetch-mock", () => {
 
 	describe("Response handling", () => {
 		test("String response", async () => {
-			const fetchMock = useFetchMock();
-
 			fetchMock.get("https://api.example.com/health", {
 				data: "OK",
 			});
@@ -144,9 +153,21 @@ describe("bun-fetch-mock", () => {
 			fetchMock.assertAllMocksUsed();
 		});
 
-		test("Empty response", async () => {
-			const fetchMock = useFetchMock();
+		test("String response uses explicit Content-Type header when provided", async () => {
+			fetchMock.get("https://api.example.com/report", {
+				data: "id,name\n1,Ada",
+				headers: { "Content-Type": "text/csv" },
+			});
 
+			const response = await fetch("https://api.example.com/report");
+			const text = await response.text();
+
+			expect(response.headers.get("Content-Type")).toBe("text/csv");
+			expect(text).toBe("id,name\n1,Ada");
+			fetchMock.assertAllMocksUsed();
+		});
+
+		test("Empty response", async () => {
 			fetchMock.get("https://api.example.com/empty", {
 				status: 204,
 			});
@@ -160,8 +181,6 @@ describe("bun-fetch-mock", () => {
 		});
 
 		test("Custom headers", async () => {
-			const fetchMock = useFetchMock();
-
 			fetchMock.get("https://api.example.com/data", {
 				data: { message: "test" },
 				headers: {
@@ -179,9 +198,7 @@ describe("bun-fetch-mock", () => {
 	});
 
 	describe("Base URL support", () => {
-		test("Uses base URL for relative paths", async () => {
-			const fetchMock = useFetchMock({ baseUrl: "https://api.example.com" });
-
+		test("Uses base URL for relative paths without adding double slashes", async () => {
 			fetchMock.get("/users", {
 				data: [{ id: 1, name: "John" }],
 			});
@@ -194,8 +211,6 @@ describe("bun-fetch-mock", () => {
 		});
 
 		test("Works with absolute URLs even with baseUrl set", async () => {
-			const fetchMock = useFetchMock({ baseUrl: "https://api.example.com" });
-
 			fetchMock.get("https://other-api.com/data", {
 				data: { source: "other" },
 			});
@@ -210,8 +225,6 @@ describe("bun-fetch-mock", () => {
 
 	describe("One-time mocks", () => {
 		test("Once mock is removed after first use", async () => {
-			const fetchMock = useFetchMock();
-
 			fetchMock.get("https://api.example.com/data", {
 				data: { count: 1 },
 				once: true,
@@ -229,8 +242,6 @@ describe("bun-fetch-mock", () => {
 		});
 
 		test("Multiple mocks with same URL", async () => {
-			const fetchMock = useFetchMock();
-
 			fetchMock
 				.get("https://api.example.com/data", {
 					data: { attempt: 1 },
@@ -254,24 +265,18 @@ describe("bun-fetch-mock", () => {
 
 	describe("Error handling", () => {
 		test("Throws error for unmocked request", async () => {
-			useFetchMock();
-
 			await expect(fetch("https://api.example.com/unknown")).rejects.toThrow(
 				"No mock found for [GET] https://api.example.com/unknown",
 			);
 		});
 
 		test("Throws error for unsupported HTTP method", async () => {
-			useFetchMock();
-
 			await expect(
 				fetch("https://api.example.com/data", { method: "TRACE" }),
 			).rejects.toThrow("Unsupported HTTP method: TRACE");
 		});
 
 		test("Validates URL format", () => {
-			const fetchMock = useFetchMock();
-
 			expect(() => {
 				fetchMock.get("invalid-url" as UrlOrPath);
 			}).toThrow(
@@ -279,9 +284,13 @@ describe("bun-fetch-mock", () => {
 			);
 		});
 
-		test("Shows available mocks in error message", async () => {
-			const fetchMock = useFetchMock();
+		test("Validates URL is non-empty", () => {
+			expect(() => {
+				fetchMock.get("" as UrlOrPath);
+			}).toThrow("Invalid URL for GET mock: URL must be a non-empty string");
+		});
 
+		test("Shows available mocks in error message", async () => {
 			fetchMock.get("https://api.example.com/users", { data: [] });
 			fetchMock.post("https://api.example.com/users", { data: {} });
 
@@ -293,8 +302,6 @@ describe("bun-fetch-mock", () => {
 
 	describe("Utility methods", () => {
 		test("reset() clears all mocks", async () => {
-			const fetchMock = useFetchMock();
-
 			fetchMock.get("https://api.example.com/data", { data: "test" });
 			fetchMock.reset();
 
@@ -303,31 +310,58 @@ describe("bun-fetch-mock", () => {
 			);
 		});
 
-		test("assertAllMocksUsed() passes when all mocks used", () => {
-			const fetchMock = useFetchMock();
-
+		test("assertAllMocksUsed() throws when mocks are unused", () => {
 			fetchMock.get("https://api.example.com/data", { data: "test" });
 
-			// This should throw since we haven't called the mock yet
+			// Should throw since we haven't called the mock yet.
 			expect(() => fetchMock.assertAllMocksUsed()).toThrow();
 		});
 
-		test("assertAllMocksUsed() throws when mocks unused", async () => {
-			const fetchMock = useFetchMock();
-
+		test("assertAllMocksUsed() passes when all mocks are used", async () => {
 			fetchMock.get("https://api.example.com/data", { data: "test" });
 
 			await fetch("https://api.example.com/data");
 
-			// Now it should pass
+			// Now it should pass.
 			expect(() => fetchMock.assertAllMocksUsed()).not.toThrow();
+		});
+	});
+
+	describe("Method normalization", () => {
+		test("Treats lowercase method values as valid HTTP methods", async () => {
+			fetchMock.post("https://api.example.com/users", {
+				data: { id: 3, name: "Lowercase Method" },
+				status: 201,
+			});
+
+			const response = await fetch("https://api.example.com/users", {
+				method: "post",
+			});
+			const data = await response.json();
+
+			expect(response.status).toBe(201);
+			expect(data).toEqual({ id: 3, name: "Lowercase Method" });
+			fetchMock.assertAllMocksUsed();
+		});
+
+		test("Treats mixed-case method values as valid HTTP methods", async () => {
+			fetchMock.patch("https://api.example.com/users/1", {
+				data: { id: 1, name: "Mixed Case" },
+			});
+
+			const response = await fetch("https://api.example.com/users/1", {
+				method: "pAtCh",
+			});
+			const data = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(data).toEqual({ id: 1, name: "Mixed Case" });
+			fetchMock.assertAllMocksUsed();
 		});
 	});
 
 	describe("Method chaining", () => {
 		test("Can chain multiple mock definitions", async () => {
-			const fetchMock = useFetchMock();
-
 			fetchMock
 				.get("https://api.example.com/users", { data: [] })
 				.post("https://api.example.com/users", { data: {}, status: 201 })
