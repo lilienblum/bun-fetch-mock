@@ -17,12 +17,12 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/dn-l/bun-fetch-mock.git"
+		"url": "https://github.com/lilienblum/bun-fetch-mock.git"
 	},
 	"bugs": {
-		"url": "https://github.com/dn-l/bun-fetch-mock/issues"
+		"url": "https://github.com/lilienblum/bun-fetch-mock/issues"
 	},
-	"homepage": "https://github.com/dn-l/bun-fetch-mock#readme",
+	"homepage": "https://github.com/lilienblum/bun-fetch-mock#readme",
 	"author": "Dan Lilienblum",
 	"license": "MIT",
 	"devDependencies": {
